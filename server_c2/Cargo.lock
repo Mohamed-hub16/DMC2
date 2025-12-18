@@ -211,14 +211,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f"
 
 [[package]]
-name = "reverse_shell"
-version = "0.1.0"
-dependencies = [
- "base64",
- "native-tls",
-]
-
-[[package]]
 name = "rustix"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -261,6 +253,14 @@ checksum = "cc1f0cbffaac4852523ce30d8bd3c5cdc873501d96ff467ca09b6767bb8cd5c0"
 dependencies = [
  "core-foundation-sys",
  "libc",
+]
+
+[[package]]
+name = "server_c2"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "native-tls",
 ]
 
 [[package]]

