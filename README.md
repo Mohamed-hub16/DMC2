@@ -43,7 +43,7 @@ Le fonctionnement repose sur un **Handshake TLS asymétrique** adapté pour un u
 3. **L'Acceptation Aveugle (Blind Trust) :** Le serveur présente son certificat auto-signé. L'agent est programmé avec la directive `danger_accept_invalid_certs(true)`. Il accepte donc ce certificat sans vérifier son autorité d'émission.
 4. **Le Tunnel :** Une clé de session symétrique est négociée. Le trafic est désormais indéchiffrable pour un pare-feu réseau. L'agent attend les ordres du C2.
 
-*(Note pédagogique : Dans une architecture de type APT réelle, une authentification mutuelle (mTLS) ou un token secret serait exigé par le serveur pour éviter que n'importe quel scanner internet ne puisse initier ce tunnel).*
+*(Note : Dans une architecture de type APT réelle, une authentification mutuelle (mTLS) ou un token secret serait exigé par le serveur pour éviter que n'importe quel scanner internet ne puisse initier ce tunnel -> C'est une implémentation que je compte faire dans le futur).*
 
 ---
 
@@ -92,7 +92,7 @@ cargo run
 
 ### Étape 2 : Infecter la Victime (Client)
 
-Sur la machine cible, compilez et lancez l'agent. *(Astuce : utilisez `--release` pour générer un binaire optimisé et plus léger).*
+Sur la machine cible, compilez et lancez l'agent. *(on peut utilisez `--release` pour générer un binaire optimisé et plus léger. Sinon classique -> cargo run main.rs).*
 
 ```bash
 cd reverse_shell
