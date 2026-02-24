@@ -6,6 +6,24 @@ use std::thread;
 use std::sync::Arc;
 use base64::{Engine as _, engine::general_purpose};
 
+
+
+fn print_target_banner() {
+    let banner = r#"
+  _____  __  __  _____ ___  
+ |  __ \|  \/  |/ ____|__ \ 
+ | |  | | \  / | |       ) |
+ | |  | | |\/| | |      / / 
+ | |__| | |  | | |____ / /_ 
+ |_____/|_|  |_|\_____|____|
+                                                   
+    [+] Connexion à la cible établie avec succès !
+    [★] DMC2 - Développé par Mohamed MESRI
+"#;
+    println!("{}", banner);
+}
+
+
 /// Point d'entrée du Serveur Command & Control (C2).
 /// Gère les connexions multi-clients via TLS et dispatch les commandes.
 fn main() {
@@ -82,7 +100,11 @@ fn main() {
                     // Handshake TLS : C'est ici que l'échange de clés se fait.
                     match acceptor.accept(stream) {
                         Ok(stream) => {
-                            println!("[+] Session TLS établie !");
+                            // efface le terminal pour faire de la place
+                            print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+                            
+                            // affichage de ma banière (incredible)
+                            print_target_banner();
                             let mut reader = BufReader::new(stream);
                             
                             // Boucle d'interaction REPL avec CE client
