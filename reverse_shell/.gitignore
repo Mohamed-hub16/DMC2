@@ -1,1 +1,4 @@
 /target
+# Secrets et certificats
+*.pfx
+*.pem
